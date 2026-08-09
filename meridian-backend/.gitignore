@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env
+meridian.db
+meridian.db-shm
+meridian.db-wal
+*.tsbuildinfo
