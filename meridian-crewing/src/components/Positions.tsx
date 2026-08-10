@@ -77,7 +77,7 @@ const Board = styled.div`
 
 const RowHead = styled.div`
   display: none;
-  grid-template-columns: 90px 1.4fr 1fr 1fr 0.8fr 130px;
+  grid-template-columns: 90px 1.1fr 0.9fr 0.9fr 0.7fr 0.7fr 130px;
   gap: 16px;
   padding: 14px 24px;
   font-family: ${theme.font.mono};
@@ -108,7 +108,7 @@ const Row = styled.div`
   }
 
   @media (min-width: 860px) {
-    grid-template-columns: 90px 1.4fr 1fr 1fr 0.8fr 130px;
+    grid-template-columns: 90px 1.1fr 0.9fr 0.9fr 0.7fr 0.7fr 130px;
     align-items: center;
     gap: 16px;
   }
@@ -227,6 +227,7 @@ const Positions: React.FC = () => {
         <RowHead>
           <div>Rank</div>
           <div>Position</div>
+          <div>Wage</div>
           <div>Vessel</div>
           <div>Contract</div>
           <div>Sign-on</div>
@@ -239,6 +240,10 @@ const Positions: React.FC = () => {
           <Row key={p.id}>
             <RankBadge>{p.rank}</RankBadge>
             <Role>{p.role}</Role>
+            <Cell>
+              <CellLabel>Wage:</CellLabel>
+              {p.wage || "Not disclosed"}
+            </Cell>
             <Cell>
               <CellLabel>Vessel:</CellLabel>
               {p.vessel}

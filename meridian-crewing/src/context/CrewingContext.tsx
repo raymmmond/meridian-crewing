@@ -15,7 +15,7 @@ interface CrewingContextValue {
   loading: boolean;
   connectionError: string | null;
   addPosition: (p: Omit<Position, "id">) => Promise<void>;
-  addApplication: (a: Omit<Application, "id" | "submitted">) => Promise<void>;
+  addApplication: (a: Omit<Application, "id" | "submitted" | "status">) => Promise<void>;
 }
 
 const CrewingContext = createContext<CrewingContextValue | null>(null);

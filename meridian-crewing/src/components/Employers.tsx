@@ -1,8 +1,15 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import styled from "styled-components";
 import theme from "../theme";
 import { useCrewing } from "../context/CrewingContext";
-import { Rank } from "../api";
+import { useAuth } from "../context/AuthContext";
+import {
+  Rank,
+  Application,
+  ApplicationStatus,
+  fetchMyPostingApplications,
+  updateApplicationStatus,
+} from "../api";
 
 const Wrap = styled.section`
   max-width: ${theme.maxWidth};
@@ -152,6 +159,77 @@ const ErrorText = styled.div`
 
 const RANK_OPTIONS: Rank[] = ["OFFICER", "RATING", "CATERING"];
 
+const ApplicantsWrap = styled.section`
+  max-width: ${theme.maxWidth};
+  margin: 0 auto;
+  padding: 0 32px 110px;
+`;
+
+const ApplicantsTitle = styled.h3`
+  font-size: 1.3rem;
+  color: ${theme.color.white};
+  margin-bottom: 20px;
+`;
+
+const ApplicantsBoard = styled.div`
+  border: 1px solid ${theme.color.navy700};
+  background: ${theme.color.navy900};
+`;
+
+const ApplicantRow = styled.div`
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  padding: 18px 24px;
+  border-bottom: 1px solid ${theme.color.navy700};
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  @media (min-width: 760px) {
+    grid-template-columns: 1fr 1fr 1fr 160px;
+    align-items: center;
+    gap: 16px;
+  }
+`;
+
+const ApplicantName = styled.div`
+  font-family: ${theme.font.body};
+  font-size: 0.95rem;
+  color: ${theme.color.paper};
+`;
+
+const ApplicantMeta = styled.div`
+  font-family: ${theme.font.mono};
+  font-size: 0.8rem;
+  color: ${theme.color.steelLight};
+`;
+
+const StatusSelect = styled.select<{ $status: ApplicationStatus }>`
+  background: ${theme.color.navy700};
+  border: 1px solid
+    ${(p) =>
+      p.$status === "OFFERED"
+        ? theme.color.brass
+        : p.$status === "REJECTED"
+        ? theme.color.rustLight
+        : theme.color.steel};
+  color: ${theme.color.paper};
+  padding: 8px 10px;
+  font-family: ${theme.font.mono};
+  font-size: 0.76rem;
+`;
+
+const EmptyApplicants = styled.p`
+  padding: 24px;
+  font-family: ${theme.font.mono};
+  font-size: 0.85rem;
+  color: ${theme.color.steelLight};
+`;
+
+const STATUS_OPTIONS: ApplicationStatus[] = ["SUBMITTED", "SHORTLISTED", "OFFERED", "REJECTED"];
+
 const Employers: React.FC = () => {
   const { addPosition } = useCrewing();
   const [role, setRole] = useState("");
@@ -160,9 +238,41 @@ const Employers: React.FC = () => {
   const [rank, setRank] = useState<Rank>("OFFICER");
   const [contract, setContract] = useState("");
   const [signOn, setSignOn] = useState("");
+  const [wage, setWage] = useState("");
   const [posted, setPosted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  const { token, user } = useAuth();
+  const [applicants, setApplicants] = useState<Application[]>([]);
+  const [applicantsLoading, setApplicantsLoading] = useState(true);
+
+  useEffect(() => {
+    if (!token || user?.role !== "EMPLOYER") {
+      setApplicantsLoading(false);
+      return;
+    }
+    fetchMyPostingApplications(token)
+      .then(setApplicants)
+      .catch(() => {
+        // A quiet failure here just means an empty list — the employer
+        // can still use the rest of the page.
+      })
+      .finally(() => setApplicantsLoading(false));
+  }, [token, user?.role, posted]); // refetch after posting, since it's a natural moment to glance at applicants too
+
+  const handleStatusChange = async (applicationId: string, status: ApplicationStatus) => {
+    if (!token) return;
+    const previous = applicants;
+    setApplicants((prev) =>
+      prev.map((a) => (a.id === applicationId ? { ...a, status } : a))
+    );
+    try {
+      await updateApplicationStatus(applicationId, status, token);
+    } catch {
+      setApplicants(previous); // roll back on failure rather than show a wrong status
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -180,6 +290,7 @@ const Employers: React.FC = () => {
         rank,
         contract: contract.trim(),
         signOn: signOn.trim(),
+        wage: wage.trim() || null,
       });
       setPosted(true);
       setRole("");
@@ -187,6 +298,7 @@ const Employers: React.FC = () => {
       setVesselType("");
       setContract("");
       setSignOn("");
+      setWage("");
       setTimeout(() => setPosted(false), 4000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -196,6 +308,7 @@ const Employers: React.FC = () => {
   };
 
   return (
+    <>
     <Wrap id="employers">
       <div>
         <Eyebrow>For shipping companies &amp; manning agents</Eyebrow>
@@ -274,6 +387,14 @@ const Employers: React.FC = () => {
             placeholder="e.g. 10 Sep"
           />
         </Field>
+        <Field>
+          Wage <span style={{ opacity: 0.6, textTransform: "none" }}>(optional, but strongly recommended — most seafarers filter by this)</span>
+          <Input
+            value={wage}
+            onChange={(e) => setWage(e.target.value)}
+            placeholder="e.g. $3,200/month"
+          />
+        </Field>
         <Submit type="submit" disabled={submitting}>
           {submitting ? "Posting…" : "Post vacancy"}
         </Submit>
@@ -281,6 +402,43 @@ const Employers: React.FC = () => {
         {posted && <Success>Posted — it's now live on the roster above.</Success>}
       </Form>
     </Wrap>
+
+    {user?.role === "EMPLOYER" && (
+      <ApplicantsWrap>
+        <ApplicantsTitle>Applicants for your postings</ApplicantsTitle>
+        <ApplicantsBoard>
+          {applicantsLoading ? (
+            <EmptyApplicants>Loading…</EmptyApplicants>
+          ) : applicants.length === 0 ? (
+            <EmptyApplicants>
+              No one's applied yet — once someone does, they'll show up here.
+            </EmptyApplicants>
+          ) : (
+            applicants.map((a) => (
+              <ApplicantRow key={a.id}>
+                <ApplicantName>{a.name}</ApplicantName>
+                <ApplicantMeta>{a.positionRole}</ApplicantMeta>
+                <ApplicantMeta>{a.email}</ApplicantMeta>
+                <StatusSelect
+                  $status={a.status}
+                  value={a.status}
+                  onChange={(e) =>
+                    handleStatusChange(a.id, e.target.value as ApplicationStatus)
+                  }
+                >
+                  {STATUS_OPTIONS.map((s) => (
+                    <option key={s} value={s}>
+                      {s.charAt(0) + s.slice(1).toLowerCase()}
+                    </option>
+                  ))}
+                </StatusSelect>
+              </ApplicantRow>
+            ))
+          )}
+        </ApplicantsBoard>
+      </ApplicantsWrap>
+    )}
+    </>
   );
 };
 

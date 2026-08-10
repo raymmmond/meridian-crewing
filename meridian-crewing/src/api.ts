@@ -1,4 +1,5 @@
 export type Rank = "OFFICER" | "RATING" | "CATERING";
+export type ApplicationStatus = "SUBMITTED" | "SHORTLISTED" | "OFFERED" | "REJECTED";
 
 export interface Position {
   id: string;
@@ -8,6 +9,7 @@ export interface Position {
   vesselType: string;
   contract: string;
   signOn: string;
+  wage: string | null;
 }
 
 export interface Application {
@@ -18,6 +20,7 @@ export interface Application {
   email: string;
   rank: string;
   submitted: string;
+  status: ApplicationStatus;
 }
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
@@ -73,12 +76,29 @@ export function fetchApplications(token: string): Promise<Application[]> {
 }
 
 export function createApplication(
-  input: Omit<Application, "id" | "submitted">,
+  input: Omit<Application, "id" | "submitted" | "status">,
   token: string
 ): Promise<Application> {
   return request<Application>(
     "/api/applications",
     { method: "POST", body: JSON.stringify(input) },
+    token
+  );
+}
+
+// Employer-only — applicants for positions THEY posted.
+export function fetchMyPostingApplications(token: string): Promise<Application[]> {
+  return request<Application[]>("/api/my-postings/applications", undefined, token);
+}
+
+export function updateApplicationStatus(
+  applicationId: string,
+  status: ApplicationStatus,
+  token: string
+): Promise<Application> {
+  return request<Application>(
+    `/api/applications/${applicationId}/status`,
+    { method: "PATCH", body: JSON.stringify({ status }) },
     token
   );
 }

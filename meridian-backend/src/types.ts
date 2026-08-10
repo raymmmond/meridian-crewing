@@ -1,5 +1,6 @@
 export type Rank = "OFFICER" | "RATING" | "CATERING";
 export type UserRole = "SEAFARER" | "EMPLOYER";
+export type ApplicationStatus = "SUBMITTED" | "SHORTLISTED" | "OFFERED" | "REJECTED";
 
 export interface AuthUser {
   id: string;
@@ -15,6 +16,7 @@ export interface Position {
   vesselType: string;
   contract: string;
   signOn: string;
+  wage: string | null;
 }
 
 export interface Application {
@@ -25,4 +27,5 @@ export interface Application {
   email: string;
   rank: string;
   submitted: string;
+  status: ApplicationStatus;
 }

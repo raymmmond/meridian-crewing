@@ -97,7 +97,7 @@ const Footer: React.FC = () => (
         </div>
       </Top>
       <Bottom>
-        <span>© 2026 Meridian Crewing. IMO-recognised manning agent.</span>
+        <span>© 2026 Meridian Crewing. Partner agencies hold valid national manning licenses (DMW, RPSL, or equivalent) and operate under MLC 2006.</span>
         <span>Rotterdam · Manila · Panama City</span>
       </Bottom>
     </Inner>

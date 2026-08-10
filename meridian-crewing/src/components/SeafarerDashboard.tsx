@@ -129,6 +129,26 @@ const AppMeta = styled.span`
   color: ${theme.color.steelLight};
 `;
 
+const AppStatus = styled.span<{ $status: string }>`
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border: 1px solid
+    ${(p) =>
+      p.$status === "OFFERED"
+        ? theme.color.brass
+        : p.$status === "REJECTED"
+        ? theme.color.rustLight
+        : theme.color.steelLight};
+  color: ${(p) =>
+    p.$status === "OFFERED"
+      ? theme.color.brass
+      : p.$status === "REJECTED"
+      ? theme.color.rustLight
+      : theme.color.steelLight};
+`;
+
 const EmptyApps = styled.p`
   font-family: ${theme.font.mono};
   font-size: 0.82rem;
@@ -223,6 +243,9 @@ const SeafarerDashboard: React.FC = () => {
                     month: "short",
                   })}
                 </AppMeta>
+                <AppStatus $status={a.status}>
+                  {a.status.charAt(0) + a.status.slice(1).toLowerCase()}
+                </AppStatus>
               </AppRow>
             ))
           )}
