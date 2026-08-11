@@ -29,3 +29,11 @@ export interface Application {
   submitted: string;
   status: ApplicationStatus;
 }
+
+export interface Document {
+  id: string;
+  label: string;
+  fileSize: number;
+  uploadedAt: string;
+  url: string;
+}

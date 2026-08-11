@@ -1,12 +1,24 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
+import multer from "multer";
+import crypto from "crypto";
 import { supabase } from "./supabaseClient";
 import { requireAuth } from "./auth-middleware";
-import { Position, Application, Rank, ApplicationStatus } from "./types";
+import { Position, Application, Rank, ApplicationStatus, Document } from "./types";
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB — matches the Supabase bucket limit
+  fileFilter: (_req, file, cb) => {
+    const allowed = ["application/pdf", "image/jpeg", "image/png"];
+    if (allowed.includes(file.mimetype)) cb(null, true);
+    else cb(new Error("Only PDF, JPEG, or PNG files are allowed."));
+  },
+});
 
 const VALID_RANKS: Rank[] = ["OFFICER", "RATING", "CATERING"];
 const VALID_STATUSES: ApplicationStatus[] = ["SUBMITTED", "SHORTLISTED", "OFFERED", "REJECTED"];
@@ -224,8 +236,165 @@ app.patch(
   }
 );
 
+// --- Documents -----------------------------------------------------
+
+const DOC_BUCKET = "documents";
+const SIGNED_URL_TTL = 300; // 5 minutes — short-lived, regenerated per request
+
+async function toApiDocument(row: any): Promise<Document> {
+  const { data } = await supabase.storage
+    .from(DOC_BUCKET)
+    .createSignedUrl(row.file_path, SIGNED_URL_TTL);
+
+  return {
+    id: row.id,
+    label: row.label,
+    fileSize: row.file_size,
+    uploadedAt: row.uploaded_at,
+    url: data?.signedUrl ?? "",
+  };
+}
+
+// A seafarer uploads their own document.
+app.post(
+  "/api/documents",
+  requireAuth("SEAFARER"),
+  upload.single("file"),
+  async (req: Request, res: Response) => {
+    const file = req.file;
+    const label = req.body?.label;
+
+    if (!file) {
+      return res.status(400).json({ error: "No file was uploaded." });
+    }
+    if (!label || !String(label).trim()) {
+      return res.status(400).json({ error: "A label is required (e.g. 'STCW Certificate')." });
+    }
+
+    const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const filePath = `${req.user!.id}/${crypto.randomUUID()}-${safeName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(DOC_BUCKET)
+      .upload(filePath, file.buffer, { contentType: file.mimetype });
+
+    if (uploadError) {
+      return res.status(500).json({ error: uploadError.message });
+    }
+
+    const { data, error } = await supabase
+      .from("documents")
+      .insert({
+        user_id: req.user!.id,
+        label: String(label).trim(),
+        file_path: filePath,
+        file_size: file.size,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      // Clean up the orphaned storage file if the database insert failed —
+      // otherwise we'd have a file with no record pointing at it.
+      await supabase.storage.from(DOC_BUCKET).remove([filePath]);
+      return res.status(500).json({ error: error.message });
+    }
+
+    res.status(201).json(await toApiDocument(data));
+  }
+);
+
+// A seafarer sees their own documents.
+app.get(
+  "/api/documents",
+  requireAuth("SEAFARER"),
+  async (req: Request, res: Response) => {
+    const { data, error } = await supabase
+      .from("documents")
+      .select("*")
+      .eq("user_id", req.user!.id)
+      .order("uploaded_at", { ascending: false });
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(await Promise.all((data ?? []).map(toApiDocument)));
+  }
+);
+
+// A seafarer deletes their own document.
+app.delete(
+  "/api/documents/:id",
+  requireAuth("SEAFARER"),
+  async (req: Request, res: Response) => {
+    const { data: doc } = await supabase
+      .from("documents")
+      .select("id, user_id, file_path")
+      .eq("id", req.params.id)
+      .maybeSingle();
+
+    if (!doc || doc.user_id !== req.user!.id) {
+      return res.status(404).json({ error: "Document not found." });
+    }
+
+    await supabase.storage.from(DOC_BUCKET).remove([doc.file_path]);
+    const { error } = await supabase.from("documents").delete().eq("id", doc.id);
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.status(204).send();
+  }
+);
+
+// An employer views documents for a seafarer who applied to one of THEIR
+// postings — never a seafarer's documents in general, only in the context
+// of a real application to a real position this employer owns.
+app.get(
+  "/api/applications/:id/documents",
+  requireAuth("EMPLOYER"),
+  async (req: Request, res: Response) => {
+    const { data: application } = await supabase
+      .from("applications")
+      .select("id, user_id, position_id, positions!inner(posted_by)")
+      .eq("id", req.params.id)
+      .maybeSingle();
+
+    if (!application) {
+      return res.status(404).json({ error: "Application not found." });
+    }
+    const postedBy = (application as any).positions?.posted_by;
+    if (postedBy !== req.user!.id) {
+      return res.status(403).json({
+        error: "You can only view documents for applicants to positions you posted.",
+      });
+    }
+
+    const { data, error } = await supabase
+      .from("documents")
+      .select("*")
+      .eq("user_id", (application as any).user_id)
+      .order("uploaded_at", { ascending: false });
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(await Promise.all((data ?? []).map(toApiDocument)));
+  }
+);
+
 app.get("/api/health", (_req: Request, res: Response) => {
   res.json({ status: "ok" });
+});
+
+// Multer throws before our route handlers run for file-size/type problems —
+// without this, those would surface as an unhandled 500 instead of a clear
+// message the frontend can actually show someone.
+app.use((err: any, _req: Request, res: Response, next: (e?: any) => void) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return res.status(400).json({ error: "File is too large. Max size is 10MB." });
+    }
+    return res.status(400).json({ error: err.message });
+  }
+  if (err) {
+    return res.status(400).json({ error: err.message || "Upload failed." });
+  }
+  next();
 });
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4000;

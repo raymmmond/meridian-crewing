@@ -7,8 +7,10 @@ import {
   Rank,
   Application,
   ApplicationStatus,
+  Document,
   fetchMyPostingApplications,
   updateApplicationStatus,
+  fetchApplicationDocuments,
 } from "../api";
 
 const Wrap = styled.section`
@@ -188,10 +190,37 @@ const ApplicantRow = styled.div`
   }
 
   @media (min-width: 760px) {
-    grid-template-columns: 1fr 1fr 1fr 160px;
+    grid-template-columns: 1fr 1fr 1fr 140px 110px;
     align-items: center;
     gap: 16px;
   }
+`;
+
+const DocsToggle = styled.button`
+  font-family: ${theme.font.mono};
+  font-size: 0.72rem;
+  color: ${theme.color.steelLight};
+  background: transparent;
+  border: 1px solid ${theme.color.steel};
+  padding: 8px 10px;
+  white-space: nowrap;
+`;
+
+const DocsPanel = styled.div`
+  grid-column: 1 / -1;
+  margin-top: 10px;
+  padding: 12px 16px;
+  background: ${theme.color.navy800};
+  border: 1px solid ${theme.color.navy700};
+  font-family: ${theme.font.mono};
+  font-size: 0.78rem;
+  color: ${theme.color.steelLight};
+`;
+
+const DocsPanelLink = styled.a`
+  color: ${theme.color.brass};
+  display: block;
+  padding: 4px 0;
 `;
 
 const ApplicantName = styled.div`
@@ -246,6 +275,9 @@ const Employers: React.FC = () => {
   const { token, user } = useAuth();
   const [applicants, setApplicants] = useState<Application[]>([]);
   const [applicantsLoading, setApplicantsLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [docsByApplication, setDocsByApplication] = useState<Record<string, Document[]>>({});
+  const [docsLoadingId, setDocsLoadingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token || user?.role !== "EMPLOYER") {
@@ -260,6 +292,24 @@ const Employers: React.FC = () => {
       })
       .finally(() => setApplicantsLoading(false));
   }, [token, user?.role, posted]); // refetch after posting, since it's a natural moment to glance at applicants too
+
+  const toggleDocs = async (applicationId: string) => {
+    if (expandedId === applicationId) {
+      setExpandedId(null);
+      return;
+    }
+    setExpandedId(applicationId);
+    if (!token || docsByApplication[applicationId]) return; // already fetched
+    setDocsLoadingId(applicationId);
+    try {
+      const docs = await fetchApplicationDocuments(applicationId, token);
+      setDocsByApplication((prev) => ({ ...prev, [applicationId]: docs }));
+    } catch {
+      setDocsByApplication((prev) => ({ ...prev, [applicationId]: [] }));
+    } finally {
+      setDocsLoadingId(null);
+    }
+  };
 
   const handleStatusChange = async (applicationId: string, status: ApplicationStatus) => {
     if (!token) return;
@@ -432,6 +482,29 @@ const Employers: React.FC = () => {
                     </option>
                   ))}
                 </StatusSelect>
+                <DocsToggle type="button" onClick={() => toggleDocs(a.id)}>
+                  {expandedId === a.id ? "Hide docs" : "Documents"}
+                </DocsToggle>
+                {expandedId === a.id && (
+                  <DocsPanel>
+                    {docsLoadingId === a.id ? (
+                      "Loading…"
+                    ) : (docsByApplication[a.id]?.length ?? 0) === 0 ? (
+                      "No documents uploaded by this applicant yet."
+                    ) : (
+                      docsByApplication[a.id].map((d) => (
+                        <DocsPanelLink
+                          key={d.id}
+                          href={d.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          {d.label} →
+                        </DocsPanelLink>
+                      ))
+                    )}
+                  </DocsPanel>
+                )}
               </ApplicantRow>
             ))
           )}
