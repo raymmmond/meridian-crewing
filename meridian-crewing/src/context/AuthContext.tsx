@@ -13,9 +13,12 @@ interface AuthContextValue {
   user: AuthUser | null;
   token: string | null;
   loading: boolean;
+  passwordRecoveryMode: boolean;
   signup: (email: string, password: string, role: UserRole) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
+  requestPasswordReset: (email: string) => Promise<void>;
+  updatePassword: (newPassword: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -38,6 +41,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [passwordRecoveryMode, setPasswordRecoveryMode] = useState(false);
 
   useEffect(() => {
     // Check for an existing session (e.g. the browser was refreshed).
@@ -49,9 +53,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       setLoading(false);
     });
 
-    // Supabase fires this on login, logout, token refresh, and on load —
-    // keeping our state in sync automatically rather than us polling it.
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    // Supabase fires PASSWORD_RECOVERY specifically when someone lands here
+    // via a reset-password email link — that's our cue to show the "set a
+    // new password" form instead of treating it as a normal login.
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setPasswordRecoveryMode(true);
+      }
       if (session) {
         setToken(session.access_token);
         setUser(toAuthUser(session.user));
@@ -75,7 +83,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       // This happens if "Confirm email" is switched on in Supabase — the
       // account is created but can't log in until the link is clicked.
       throw new Error(
-        "Account created, but email confirmation is required before you can log in. Turn off 'Confirm email' in Supabase (Authentication → Providers → Email) while testing."
+        "Account created — check your email to confirm before logging in."
       );
     }
   };
@@ -89,8 +97,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     supabase.auth.signOut();
   };
 
+  const requestPasswordReset: AuthContextValue["requestPasswordReset"] = async (
+    email
+  ) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin,
+    });
+    if (error) throw new Error(error.message);
+  };
+
+  const updatePassword: AuthContextValue["updatePassword"] = async (
+    newPassword
+  ) => {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) throw new Error(error.message);
+    setPasswordRecoveryMode(false);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, token, loading, signup, login, logout }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        token,
+        loading,
+        passwordRecoveryMode,
+        signup,
+        login,
+        logout,
+        requestPasswordReset,
+        updatePassword,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
