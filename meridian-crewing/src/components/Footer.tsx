@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 import styled from "styled-components";
 import theme from "../theme";
 
@@ -20,8 +21,8 @@ const Top = styled.div`
   padding-bottom: 40px;
   border-bottom: 1px solid ${theme.color.navy700};
 
-  @media (min-width: 800px) {
-    grid-template-columns: 1.4fr 1fr 1fr;
+  @media (min-width: 900px) {
+    grid-template-columns: 1.2fr 1fr 1fr 1fr;
   }
 `;
 
@@ -94,6 +95,11 @@ const Footer: React.FC = () => (
           <ColLink href="#employers">Post a vacancy</ColLink>
           <ColLink href="#employers">Candidate pool</ColLink>
           <ColLink href="#top">Talk to the desk</ColLink>
+        </div>
+        <div>
+          <ColTitle>Legal</ColTitle>
+          <ColLink as={Link} to="/terms">Terms of Service</ColLink>
+          <ColLink as={Link} to="/privacy">Privacy Policy</ColLink>
         </div>
       </Top>
       <Bottom>

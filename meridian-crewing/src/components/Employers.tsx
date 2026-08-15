@@ -5,6 +5,8 @@ import { useCrewing } from "../context/CrewingContext";
 import { useAuth } from "../context/AuthContext";
 import {
   Rank,
+  RANK_LABELS,
+  RANK_ROLE_SUGGESTIONS,
   Application,
   ApplicationStatus,
   Document,
@@ -159,7 +161,14 @@ const ErrorText = styled.div`
   padding: 10px 0 0;
 `;
 
-const RANK_OPTIONS: Rank[] = ["OFFICER", "RATING", "CATERING"];
+const RANK_OPTIONS: Rank[] = [
+  "DECK_OFFICER",
+  "ENGINE_OFFICER",
+  "ELECTRO_TECHNICAL",
+  "DECK_RATING",
+  "ENGINE_RATING",
+  "CATERING",
+];
 
 const ApplicantsWrap = styled.section`
   max-width: ${theme.maxWidth};
@@ -264,7 +273,7 @@ const Employers: React.FC = () => {
   const [role, setRole] = useState("");
   const [vessel, setVessel] = useState("");
   const [vesselType, setVesselType] = useState("");
-  const [rank, setRank] = useState<Rank>("OFFICER");
+  const [rank, setRank] = useState<Rank>("DECK_OFFICER");
   const [contract, setContract] = useState("");
   const [signOn, setSignOn] = useState("");
   const [wage, setWage] = useState("");
@@ -390,14 +399,6 @@ const Employers: React.FC = () => {
       </div>
 
       <Form id="post-vacancy" onSubmit={handleSubmit}>
-        <Field>
-          Position title
-          <Input
-            value={role}
-            onChange={(e) => setRole(e.target.value)}
-            placeholder="e.g. 3rd Engineer"
-          />
-        </Field>
         <Row2>
           <Field>
             Rank category
@@ -407,7 +408,7 @@ const Employers: React.FC = () => {
             >
               {RANK_OPTIONS.map((r) => (
                 <option key={r} value={r}>
-                  {r}
+                  {RANK_LABELS[r]}
                 </option>
               ))}
             </Select>
@@ -421,6 +422,20 @@ const Employers: React.FC = () => {
             />
           </Field>
         </Row2>
+        <Field>
+          Position title
+          <Input
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+            placeholder={`e.g. ${RANK_ROLE_SUGGESTIONS[rank][0]}`}
+            list="role-suggestions"
+          />
+          <datalist id="role-suggestions">
+            {RANK_ROLE_SUGGESTIONS[rank].map((title) => (
+              <option key={title} value={title} />
+            ))}
+          </datalist>
+        </Field>
         <Field>
           Vessel
           <Input

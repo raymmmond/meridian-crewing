@@ -1,4 +1,33 @@
-export type Rank = "OFFICER" | "RATING" | "CATERING";
+export type Rank =
+  | "DECK_OFFICER"
+  | "ENGINE_OFFICER"
+  | "ELECTRO_TECHNICAL"
+  | "DECK_RATING"
+  | "ENGINE_RATING"
+  | "CATERING";
+
+// Human-readable labels — the rank codes themselves are for the database
+// and API, never shown directly in the UI.
+export const RANK_LABELS: Record<Rank, string> = {
+  DECK_OFFICER: "Deck Officer",
+  ENGINE_OFFICER: "Engine Officer",
+  ELECTRO_TECHNICAL: "Electro-Technical",
+  DECK_RATING: "Deck Rating",
+  ENGINE_RATING: "Engine Rating",
+  CATERING: "Catering",
+};
+
+// Real title suggestions per category, offered on the post-vacancy form.
+// Free text is still allowed — this just steers toward consistent,
+// recognizable titles instead of everyone inventing their own wording.
+export const RANK_ROLE_SUGGESTIONS: Record<Rank, string[]> = {
+  DECK_OFFICER: ["Master", "Chief Officer", "2nd Officer", "3rd Officer", "Deck Cadet"],
+  ENGINE_OFFICER: ["Chief Engineer", "2nd Engineer", "3rd Engineer", "4th Engineer", "Engine Cadet"],
+  ELECTRO_TECHNICAL: ["Electro-Technical Officer (ETO)", "Electrician"],
+  DECK_RATING: ["Bosun", "Able Seaman (AB)", "Ordinary Seaman (OS)"],
+  ENGINE_RATING: ["Motorman", "Oiler", "Wiper", "Fitter"],
+  CATERING: ["Chief Cook", "2nd Cook", "Chief Steward", "Steward/Messman"],
+};
 export type ApplicationStatus = "SUBMITTED" | "SHORTLISTED" | "OFFERED" | "REJECTED";
 
 export interface Position {

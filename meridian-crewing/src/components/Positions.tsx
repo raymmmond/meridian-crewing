@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import styled from "styled-components";
 import theme from "../theme";
 import { useCrewing } from "../context/CrewingContext";
-import { Position, Rank } from "../api";
+import { Position, Rank, RANK_LABELS } from "../api";
 import ApplyModal from "./ApplyModal";
 
 const Wrap = styled.section`
@@ -77,7 +77,7 @@ const Board = styled.div`
 
 const RowHead = styled.div`
   display: none;
-  grid-template-columns: 90px 1.1fr 0.9fr 0.9fr 0.7fr 0.7fr 130px;
+  grid-template-columns: 130px 1fr 0.9fr 0.9fr 0.7fr 0.6fr 130px;
   gap: 16px;
   padding: 14px 24px;
   font-family: ${theme.font.mono};
@@ -108,7 +108,7 @@ const Row = styled.div`
   }
 
   @media (min-width: 860px) {
-    grid-template-columns: 90px 1.1fr 0.9fr 0.9fr 0.7fr 0.7fr 130px;
+    grid-template-columns: 130px 1fr 0.9fr 0.9fr 0.7fr 0.6fr 130px;
     align-items: center;
     gap: 16px;
   }
@@ -116,12 +116,14 @@ const Row = styled.div`
 
 const RankBadge = styled.div`
   font-family: ${theme.font.mono};
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   color: ${theme.color.brass};
   border: 1px solid ${theme.color.brass};
   padding: 3px 8px;
   display: inline-block;
-  width: fit-content;
+  max-width: 100%;
+  white-space: normal;
+  line-height: 1.3;
 `;
 
 const Role = styled.div`
@@ -173,7 +175,15 @@ const Empty = styled.div`
   color: ${theme.color.steelLight};
 `;
 
-const RANKS: Array<Rank | "ALL"> = ["ALL", "OFFICER", "RATING", "CATERING"];
+const RANKS: Array<Rank | "ALL"> = [
+  "ALL",
+  "DECK_OFFICER",
+  "ENGINE_OFFICER",
+  "ELECTRO_TECHNICAL",
+  "DECK_RATING",
+  "ENGINE_RATING",
+  "CATERING",
+];
 
 const Positions: React.FC = () => {
   const { positions } = useCrewing();
@@ -218,7 +228,7 @@ const Positions: React.FC = () => {
             onClick={() => setRankFilter(r)}
             type="button"
           >
-            {r === "ALL" ? "All ranks" : r}
+            {r === "ALL" ? "All ranks" : RANK_LABELS[r]}
           </RankButton>
         ))}
       </Filters>
@@ -238,7 +248,7 @@ const Positions: React.FC = () => {
         )}
         {filtered.map((p) => (
           <Row key={p.id}>
-            <RankBadge>{p.rank}</RankBadge>
+            <RankBadge>{RANK_LABELS[p.rank]}</RankBadge>
             <Role>{p.role}</Role>
             <Cell>
               <CellLabel>Wage:</CellLabel>

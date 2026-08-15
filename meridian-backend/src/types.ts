@@ -1,4 +1,10 @@
-export type Rank = "OFFICER" | "RATING" | "CATERING";
+export type Rank =
+  | "DECK_OFFICER"
+  | "ENGINE_OFFICER"
+  | "ELECTRO_TECHNICAL"
+  | "DECK_RATING"
+  | "ENGINE_RATING"
+  | "CATERING";
 export type UserRole = "SEAFARER" | "EMPLOYER";
 export type ApplicationStatus = "SUBMITTED" | "SHORTLISTED" | "OFFERED" | "REJECTED";
 

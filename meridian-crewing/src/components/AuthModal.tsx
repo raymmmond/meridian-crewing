@@ -152,6 +152,26 @@ const ForgotLink = styled.button`
   text-decoration: underline;
 `
 
+const AgreeRow = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 20px;
+  font-family: ${theme.font.mono};
+  font-size: 0.76rem;
+  color: ${theme.color.steelLight};
+  line-height: 1.5;
+
+  input {
+    margin-top: 3px;
+  }
+
+  a {
+    color: ${theme.color.brass};
+    text-decoration: underline;
+  }
+`
+
 const Confirm = styled.p`
   font-family: ${theme.font.mono};
   font-size: 0.88rem;
@@ -171,6 +191,7 @@ const AuthModal: React.FC<Props> = ({ onClose }) => {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [role, setRole] = useState<UserRole>('SEAFARER')
+  const [agreedToTerms, setAgreedToTerms] = useState(false)
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [resetSent, setResetSent] = useState(false)
@@ -202,6 +223,10 @@ const AuthModal: React.FC<Props> = ({ onClose }) => {
     }
     if (mode === 'signup' && password.length < 8) {
       setError('Password must be at least 8 characters.')
+      return
+    }
+    if (mode === 'signup' && !agreedToTerms) {
+      setError('You need to agree to the Terms of Service and Privacy Policy to create an account.')
       return
     }
 
@@ -326,6 +351,26 @@ const AuthModal: React.FC<Props> = ({ onClose }) => {
                     </RoleButton>
                   </RoleToggle>
                 </Field>
+              )}
+              {mode === 'signup' && (
+                <AgreeRow>
+                  <input
+                    type="checkbox"
+                    id="agree-terms"
+                    checked={agreedToTerms}
+                    onChange={(e) => setAgreedToTerms(e.target.checked)}
+                  />
+                  <label htmlFor="agree-terms">
+                    I agree to the{' '}
+                    <a href="/terms" target="_blank" rel="noopener noreferrer">
+                      Terms of Service
+                    </a>{' '}
+                    and{' '}
+                    <a href="/privacy" target="_blank" rel="noopener noreferrer">
+                      Privacy Policy
+                    </a>
+                  </label>
+                </AgreeRow>
               )}
               <Actions>
                 <Submit type="submit" disabled={submitting}>

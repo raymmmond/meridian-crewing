@@ -193,8 +193,9 @@ const AppTitle = styled.h3`
 `;
 
 const AppRow = styled.div`
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr 70px 110px;
+  align-items: center;
   gap: 12px;
   padding: 12px 0;
   border-bottom: 1px solid ${theme.color.navy700};
@@ -208,6 +209,9 @@ const AppRow = styled.div`
 
 const AppRole = styled.span`
   color: ${theme.color.paper};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 `;
 
 const AppMeta = styled.span`
