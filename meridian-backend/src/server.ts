@@ -10,11 +10,28 @@ import {
   postVacancyLimiter,
   uploadLimiter,
 } from "./rate-limit";
-import { Position, Application, Rank, ApplicationStatus, Document } from "./types";
+import { Position, Application, Rank, ApplicationStatus, Document, EmployerProfile } from "./types";
 
 const app = express();
 app.set("trust proxy", 1); // Render sits behind a proxy — without this, every request looks like it's from the same IP
-app.use(cors());
+
+const ALLOWED_ORIGINS = [
+  "http://localhost:5173",
+  "https://meridian-crewing.vercel.app",
+];
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // No origin at all means a server-to-server request or a tool like
+      // curl — not a browser, so the origin check doesn't apply to it.
+      if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+  })
+);
 app.use(express.json());
 app.use(generalLimiter);
 
@@ -40,7 +57,7 @@ const VALID_STATUSES: ApplicationStatus[] = ["SUBMITTED", "SHORTLISTED", "OFFERE
 const EMAIL_RE = /^\S+@\S+\.\S+$/;
 
 // Maps our camelCase API shape to Postgres' snake_case columns, and back.
-function toApiPosition(row: any): Position {
+function toApiPosition(row: any, employer: EmployerProfile | null = null): Position {
   return {
     id: row.id,
     rank: row.rank,
@@ -50,6 +67,18 @@ function toApiPosition(row: any): Position {
     contract: row.contract,
     signOn: row.sign_on,
     wage: row.wage,
+    wageMin: row.wage_min,
+    contractMonths: row.contract_months,
+    employer,
+    filled: row.filled ?? false,
+  };
+}
+
+function toApiEmployerProfile(row: any): EmployerProfile {
+  return {
+    companyName: row.company_name,
+    licenseNumber: row.license_number,
+    licenseCountry: row.license_country,
   };
 }
 
@@ -72,10 +101,26 @@ app.get("/api/positions", async (_req: Request, res: Response) => {
   const { data, error } = await supabase
     .from("positions")
     .select("*")
+    .eq("filled", false)
     .order("created_at", { ascending: false });
 
   if (error) return res.status(500).json({ error: error.message });
-  res.json((data ?? []).map(toApiPosition));
+
+  const rows = data ?? [];
+  const postedByIds = [...new Set(rows.map((r) => r.posted_by).filter(Boolean))];
+
+  let employerByUserId: Record<string, EmployerProfile> = {};
+  if (postedByIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from("employer_profiles")
+      .select("*")
+      .in("user_id", postedByIds);
+    for (const p of profiles ?? []) {
+      employerByUserId[p.user_id] = toApiEmployerProfile(p);
+    }
+  }
+
+  res.json(rows.map((row) => toApiPosition(row, employerByUserId[row.posted_by] ?? null)));
 });
 
 // Only employers can post a vacancy.
@@ -84,7 +129,8 @@ app.post(
   requireAuth("EMPLOYER"),
   postVacancyLimiter,
   async (req: Request, res: Response) => {
-    const { rank, role, vessel, vesselType, contract, signOn, wage } = req.body ?? {};
+    const { rank, role, vessel, vesselType, contract, signOn, wage, wageMin, contractMonths } =
+      req.body ?? {};
 
     if (!role || !vessel || !contract || !signOn) {
       return res.status(400).json({
@@ -94,6 +140,39 @@ app.post(
     if (!VALID_RANKS.includes(rank)) {
       return res.status(400).json({
         error: `rank must be one of: ${VALID_RANKS.join(", ")}`,
+      });
+    }
+
+    let parsedWageMin: number | null = null;
+    if (wageMin !== undefined && wageMin !== null && wageMin !== "") {
+      parsedWageMin = Number(wageMin);
+      if (!Number.isFinite(parsedWageMin) || parsedWageMin < 0) {
+        return res.status(400).json({ error: "wageMin must be a positive number." });
+      }
+    }
+
+    let parsedContractMonths: number | null = null;
+    if (contractMonths !== undefined && contractMonths !== null && contractMonths !== "") {
+      parsedContractMonths = Number(contractMonths);
+      if (!Number.isInteger(parsedContractMonths) || parsedContractMonths < 1) {
+        return res.status(400).json({ error: "contractMonths must be a whole number of months." });
+      }
+    }
+
+    // No anonymous postings — an employer must set a company name on their
+    // profile before their first vacancy goes live. This is the actual
+    // accountability mechanism: it's self-reported, not independently
+    // verified, but it's no longer optional or missing entirely.
+    const { data: employerProfile } = await supabase
+      .from("employer_profiles")
+      .select("*")
+      .eq("user_id", req.user!.id)
+      .maybeSingle();
+
+    if (!employerProfile || !employerProfile.company_name) {
+      return res.status(400).json({
+        error:
+          "Set your company name in your employer profile before posting a vacancy.",
       });
     }
 
@@ -107,13 +186,15 @@ app.post(
         contract: String(contract).trim(),
         sign_on: String(signOn).trim(),
         wage: wage ? String(wage).trim() : null,
+        wage_min: parsedWageMin,
+        contract_months: parsedContractMonths,
         posted_by: req.user!.id,
       })
       .select()
       .single();
 
     if (error) return res.status(500).json({ error: error.message });
-    res.status(201).json(toApiPosition(data));
+    res.status(201).json(toApiPosition(data, toApiEmployerProfile(employerProfile)));
   }
 );
 
@@ -178,6 +259,156 @@ app.post(
 
     if (error) return res.status(500).json({ error: error.message });
     res.status(201).json(toApiApplication(data));
+  }
+);
+
+// --- Employer's own postings (manage, not just view applicants) -------
+
+// Everything this employer has posted, filled or not — unlike the public
+// GET /api/positions, which hides filled ones.
+app.get(
+  "/api/my-postings",
+  requireAuth("EMPLOYER"),
+  async (req: Request, res: Response) => {
+    const { data, error } = await supabase
+      .from("positions")
+      .select("*")
+      .eq("posted_by", req.user!.id)
+      .order("created_at", { ascending: false });
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json((data ?? []).map((row) => toApiPosition(row, null)));
+  }
+);
+
+app.patch(
+  "/api/positions/:id/filled",
+  requireAuth("EMPLOYER"),
+  async (req: Request, res: Response) => {
+    const { filled } = req.body ?? {};
+    if (typeof filled !== "boolean") {
+      return res.status(400).json({ error: "filled must be true or false." });
+    }
+
+    const { data: existing } = await supabase
+      .from("positions")
+      .select("id, posted_by")
+      .eq("id", req.params.id)
+      .maybeSingle();
+
+    if (!existing || existing.posted_by !== req.user!.id) {
+      return res.status(404).json({ error: "Position not found." });
+    }
+
+    const { data, error } = await supabase
+      .from("positions")
+      .update({ filled })
+      .eq("id", req.params.id)
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(toApiPosition(data, null));
+  }
+);
+
+// Deleting is blocked if real applications exist — a seafarer's
+// application history shouldn't vanish because an employer cleaned up a
+// posting. Marking it filled is the correct move in that case instead.
+app.delete(
+  "/api/positions/:id",
+  requireAuth("EMPLOYER"),
+  async (req: Request, res: Response) => {
+    const { data: existing } = await supabase
+      .from("positions")
+      .select("id, posted_by")
+      .eq("id", req.params.id)
+      .maybeSingle();
+
+    if (!existing || existing.posted_by !== req.user!.id) {
+      return res.status(404).json({ error: "Position not found." });
+    }
+
+    const { count } = await supabase
+      .from("applications")
+      .select("id", { count: "exact", head: true })
+      .eq("position_id", req.params.id);
+
+    if (count && count > 0) {
+      return res.status(400).json({
+        error: `This position has ${count} application(s) — mark it as filled instead of deleting, so applicants aren't lost.`,
+      });
+    }
+
+    const { error } = await supabase.from("positions").delete().eq("id", req.params.id);
+    if (error) return res.status(500).json({ error: error.message });
+    res.status(204).send();
+  }
+);
+
+// --- Employer profile (self-reported company/license info) ------------
+
+app.get(
+  "/api/employer-profile",
+  requireAuth("EMPLOYER"),
+  async (req: Request, res: Response) => {
+    const { data, error } = await supabase
+      .from("employer_profiles")
+      .select("*")
+      .eq("user_id", req.user!.id)
+      .maybeSingle();
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data ? toApiEmployerProfile(data) : null);
+  }
+);
+
+app.put(
+  "/api/employer-profile",
+  requireAuth("EMPLOYER"),
+  async (req: Request, res: Response) => {
+    const { companyName, licenseNumber, licenseCountry } = req.body ?? {};
+
+    if (!companyName || !String(companyName).trim()) {
+      return res.status(400).json({ error: "Company name is required." });
+    }
+
+    const { data, error } = await supabase
+      .from("employer_profiles")
+      .upsert({
+        user_id: req.user!.id,
+        company_name: String(companyName).trim(),
+        license_number: licenseNumber ? String(licenseNumber).trim() : null,
+        license_country: licenseCountry ? String(licenseCountry).trim() : null,
+        updated_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(toApiEmployerProfile(data));
+  }
+);
+
+// A seafarer withdraws their own application — checked against ownership,
+// not just trusted from the client.
+app.delete(
+  "/api/applications/:id",
+  requireAuth("SEAFARER"),
+  async (req: Request, res: Response) => {
+    const { data: existing } = await supabase
+      .from("applications")
+      .select("id, user_id")
+      .eq("id", req.params.id)
+      .maybeSingle();
+
+    if (!existing || existing.user_id !== req.user!.id) {
+      return res.status(404).json({ error: "Application not found." });
+    }
+
+    const { error } = await supabase.from("applications").delete().eq("id", req.params.id);
+    if (error) return res.status(500).json({ error: error.message });
+    res.status(204).send();
   }
 );
 
@@ -394,6 +625,63 @@ app.get(
     res.json(await Promise.all((data ?? []).map(toApiDocument)));
   }
 );
+
+// --- Account deletion --------------------------------------------------
+
+// No DB-level cascade delete is set up between these tables, so this does
+// the cleanup manually, in dependency order, before removing the auth
+// account itself. If any step fails partway, the account isn't deleted —
+// better to leave orphaned data needing a manual look than to half-delete
+// someone's account.
+app.delete("/api/account", requireAuth(), async (req: Request, res: Response) => {
+  const userId = req.user!.id;
+
+  // 1. Documents — remove the actual storage files, then the DB rows.
+  const { data: docs } = await supabase
+    .from("documents")
+    .select("id, file_path")
+    .eq("user_id", userId);
+
+  if (docs && docs.length > 0) {
+    await supabase.storage.from(DOC_BUCKET).remove(docs.map((d) => d.file_path));
+    const { error: docError } = await supabase.from("documents").delete().eq("user_id", userId);
+    if (docError) return res.status(500).json({ error: `Failed deleting documents: ${docError.message}` });
+  }
+
+  // 2. Positions this user posted (if an employer) — delete their
+  // applications first, since applications reference position_id.
+  const { data: ownedPositions } = await supabase
+    .from("positions")
+    .select("id")
+    .eq("posted_by", userId);
+
+  const ownedPositionIds = (ownedPositions ?? []).map((p) => p.id);
+  if (ownedPositionIds.length > 0) {
+    const { error: appError } = await supabase
+      .from("applications")
+      .delete()
+      .in("position_id", ownedPositionIds);
+    if (appError) return res.status(500).json({ error: `Failed deleting applications: ${appError.message}` });
+
+    const { error: posError } = await supabase.from("positions").delete().eq("posted_by", userId);
+    if (posError) return res.status(500).json({ error: `Failed deleting positions: ${posError.message}` });
+  }
+
+  // 3. This user's own applications (if a seafarer).
+  const { error: ownAppError } = await supabase.from("applications").delete().eq("user_id", userId);
+  if (ownAppError) return res.status(500).json({ error: `Failed deleting your applications: ${ownAppError.message}` });
+
+  // 4. Employer profile, if any.
+  const { error: profileError } = await supabase.from("employer_profiles").delete().eq("user_id", userId);
+  if (profileError) return res.status(500).json({ error: `Failed deleting employer profile: ${profileError.message}` });
+
+  // 5. Finally, the actual account — this requires the admin API, which
+  // only the service_role key (never exposed to the frontend) can call.
+  const { error: authError } = await supabase.auth.admin.deleteUser(userId);
+  if (authError) return res.status(500).json({ error: `Failed deleting account: ${authError.message}` });
+
+  res.status(204).send();
+});
 
 app.get("/api/health", (_req: Request, res: Response) => {
   res.json({ status: "ok" });

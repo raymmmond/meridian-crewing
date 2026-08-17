@@ -3,6 +3,7 @@ import styled from "styled-components";
 import theme from "../theme";
 import { useCrewing } from "../context/CrewingContext";
 import { useAuth } from "../context/AuthContext";
+import EmployerProfilePanel from "./EmployerProfilePanel";
 import {
   Rank,
   RANK_LABELS,
@@ -10,9 +11,13 @@ import {
   Application,
   ApplicationStatus,
   Document,
+  Position,
   fetchMyPostingApplications,
   updateApplicationStatus,
   fetchApplicationDocuments,
+  fetchMyPostings,
+  setPositionFilled,
+  deletePosition,
 } from "../api";
 
 const Wrap = styled.section`
@@ -266,6 +271,63 @@ const EmptyApplicants = styled.p`
   color: ${theme.color.steelLight};
 `;
 
+const PostingRow = styled.div`
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  padding: 16px 24px;
+  border-bottom: 1px solid ${theme.color.navy700};
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  @media (min-width: 760px) {
+    grid-template-columns: 1fr 100px 110px 100px;
+    align-items: center;
+    gap: 16px;
+  }
+`;
+
+const PostingTitle = styled.div`
+  font-family: ${theme.font.body};
+  font-size: 0.95rem;
+  color: ${theme.color.paper};
+`;
+
+const FilledTag = styled.span`
+  font-family: ${theme.font.mono};
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: ${theme.color.steelLight};
+  border: 1px solid ${theme.color.steel};
+  padding: 3px 8px;
+  width: fit-content;
+`;
+
+const PostingButton = styled.button`
+  font-family: ${theme.font.mono};
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: transparent;
+  border: 1px solid ${theme.color.steel};
+  color: ${theme.color.steelLight};
+  padding: 8px 10px;
+  white-space: nowrap;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`;
+
+const DeleteRowButton = styled(PostingButton)`
+  border-color: ${theme.color.rustLight};
+  color: ${theme.color.rustLight};
+`;
+
 const STATUS_OPTIONS: ApplicationStatus[] = ["SUBMITTED", "SHORTLISTED", "OFFERED", "REJECTED"];
 
 const Employers: React.FC = () => {
@@ -277,6 +339,8 @@ const Employers: React.FC = () => {
   const [contract, setContract] = useState("");
   const [signOn, setSignOn] = useState("");
   const [wage, setWage] = useState("");
+  const [wageMin, setWageMin] = useState("");
+  const [contractMonths, setContractMonths] = useState("");
   const [posted, setPosted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -287,6 +351,52 @@ const Employers: React.FC = () => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [docsByApplication, setDocsByApplication] = useState<Record<string, Document[]>>({});
   const [docsLoadingId, setDocsLoadingId] = useState<string | null>(null);
+
+  const [myPostings, setMyPostings] = useState<Position[]>([]);
+  const [postingsLoading, setPostingsLoading] = useState(true);
+  const [postingActionError, setPostingActionError] = useState("");
+  const [postingActionId, setPostingActionId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!token || user?.role !== "EMPLOYER") {
+      setPostingsLoading(false);
+      return;
+    }
+    fetchMyPostings(token)
+      .then(setMyPostings)
+      .catch(() => {
+        // Empty list on failure — the rest of the page still works.
+      })
+      .finally(() => setPostingsLoading(false));
+  }, [token, user?.role, posted]);
+
+  const handleToggleFilled = async (position: Position) => {
+    if (!token) return;
+    setPostingActionError("");
+    setPostingActionId(position.id);
+    try {
+      const updated = await setPositionFilled(position.id, !position.filled, token);
+      setMyPostings((prev) => prev.map((p) => (p.id === position.id ? updated : p)));
+    } catch (err) {
+      setPostingActionError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setPostingActionId(null);
+    }
+  };
+
+  const handleDeletePosting = async (position: Position) => {
+    if (!token) return;
+    setPostingActionError("");
+    setPostingActionId(position.id);
+    try {
+      await deletePosition(position.id, token);
+      setMyPostings((prev) => prev.filter((p) => p.id !== position.id));
+    } catch (err) {
+      setPostingActionError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setPostingActionId(null);
+    }
+  };
 
   useEffect(() => {
     if (!token || user?.role !== "EMPLOYER") {
@@ -350,6 +460,8 @@ const Employers: React.FC = () => {
         contract: contract.trim(),
         signOn: signOn.trim(),
         wage: wage.trim() || null,
+        wageMin: wageMin.trim() ? Number(wageMin) : null,
+        contractMonths: contractMonths.trim() ? Number(contractMonths) : null,
       });
       setPosted(true);
       setRole("");
@@ -358,6 +470,8 @@ const Employers: React.FC = () => {
       setContract("");
       setSignOn("");
       setWage("");
+      setWageMin("");
+      setContractMonths("");
       setTimeout(() => setPosted(false), 4000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -398,9 +512,11 @@ const Employers: React.FC = () => {
         </StatsPanel>
       </div>
 
-      <Form id="post-vacancy" onSubmit={handleSubmit}>
-        <Row2>
-          <Field>
+      <div>
+        <EmployerProfilePanel />
+        <Form id="post-vacancy" onSubmit={handleSubmit}>
+          <Row2>
+            <Field>
             Rank category
             <Select
               value={rank}
@@ -419,6 +535,34 @@ const Employers: React.FC = () => {
               value={contract}
               onChange={(e) => setContract(e.target.value)}
               placeholder="e.g. 6 months"
+            />
+          </Field>
+        </Row2>
+        <Row2>
+          <Field>
+            Contract length in months{" "}
+            <span style={{ opacity: 0.6, textTransform: "none" }}>
+              (optional — enables contract-length filtering)
+            </span>
+            <Input
+              type="number"
+              min="1"
+              value={contractMonths}
+              onChange={(e) => setContractMonths(e.target.value)}
+              placeholder="e.g. 6"
+            />
+          </Field>
+          <Field>
+            Minimum wage, USD/month{" "}
+            <span style={{ opacity: 0.6, textTransform: "none" }}>
+              (optional — enables wage filtering)
+            </span>
+            <Input
+              type="number"
+              min="0"
+              value={wageMin}
+              onChange={(e) => setWageMin(e.target.value)}
+              placeholder="e.g. 3200"
             />
           </Field>
         </Row2>
@@ -466,7 +610,47 @@ const Employers: React.FC = () => {
         {error && <ErrorText>{error}</ErrorText>}
         {posted && <Success>Posted — it's now live on the roster above.</Success>}
       </Form>
+      </div>
     </Wrap>
+
+    {user?.role === "EMPLOYER" && (
+      <ApplicantsWrap>
+        <ApplicantsTitle>Your postings</ApplicantsTitle>
+        {postingActionError && <ErrorText>{postingActionError}</ErrorText>}
+        <ApplicantsBoard>
+          {postingsLoading ? (
+            <EmptyApplicants>Loading…</EmptyApplicants>
+          ) : myPostings.length === 0 ? (
+            <EmptyApplicants>
+              You haven't posted any vacancies yet — use the form above.
+            </EmptyApplicants>
+          ) : (
+            myPostings.map((p) => (
+              <PostingRow key={p.id}>
+                <PostingTitle>
+                  {p.role} — {p.vessel}
+                </PostingTitle>
+                <FilledTag>{p.filled ? "Filled" : "Open"}</FilledTag>
+                <PostingButton
+                  type="button"
+                  disabled={postingActionId === p.id}
+                  onClick={() => handleToggleFilled(p)}
+                >
+                  {p.filled ? "Reopen" : "Mark filled"}
+                </PostingButton>
+                <DeleteRowButton
+                  type="button"
+                  disabled={postingActionId === p.id}
+                  onClick={() => handleDeletePosting(p)}
+                >
+                  Delete
+                </DeleteRowButton>
+              </PostingRow>
+            ))
+          )}
+        </ApplicantsBoard>
+      </ApplicantsWrap>
+    )}
 
     {user?.role === "EMPLOYER" && (
       <ApplicantsWrap>

@@ -194,9 +194,9 @@ const AppTitle = styled.h3`
 
 const AppRow = styled.div`
   display: grid;
-  grid-template-columns: 1fr 70px 110px;
+  grid-template-columns: 1fr 70px 100px 80px;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   padding: 12px 0;
   border-bottom: 1px solid ${theme.color.navy700};
   font-family: ${theme.font.mono};
@@ -238,6 +238,21 @@ const AppStatus = styled.span<{ $status: string }>`
       : theme.color.steelLight};
 `;
 
+const WithdrawButton = styled.button`
+  font-family: ${theme.font.mono};
+  font-size: 0.68rem;
+  color: ${theme.color.rustLight};
+  background: transparent;
+  border: 1px solid ${theme.color.rustLight};
+  padding: 5px 8px;
+  white-space: nowrap;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`;
+
 const EmptyState = styled.p`
   font-family: ${theme.font.mono};
   font-size: 0.82rem;
@@ -252,7 +267,20 @@ function formatSize(bytes: number): string {
 }
 
 const SeafarerDashboard: React.FC = () => {
-  const { applications } = useCrewing();
+  const { applications, removeApplication } = useCrewing();
+  const [withdrawingId, setWithdrawingId] = useState<string | null>(null);
+
+  const handleWithdraw = async (applicationId: string) => {
+    setWithdrawingId(applicationId);
+    try {
+      await removeApplication(applicationId);
+    } catch {
+      // If it fails, the application stays in the list — better than
+      // pretending it's gone when it isn't.
+    } finally {
+      setWithdrawingId(null);
+    }
+  };
   const { token, user } = useAuth();
 
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -410,6 +438,13 @@ const SeafarerDashboard: React.FC = () => {
                 <AppStatus $status={a.status}>
                   {a.status.charAt(0) + a.status.slice(1).toLowerCase()}
                 </AppStatus>
+                <WithdrawButton
+                  type="button"
+                  disabled={withdrawingId === a.id}
+                  onClick={() => handleWithdraw(a.id)}
+                >
+                  {withdrawingId === a.id ? "…" : "Withdraw"}
+                </WithdrawButton>
               </AppRow>
             ))
           )}

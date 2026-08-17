@@ -59,6 +59,44 @@ const Search = styled.input`
   }
 `;
 
+const WageInput = styled.input`
+  width: 180px;
+  background: ${theme.color.navy900};
+  border: 1px solid ${theme.color.navy700};
+  color: ${theme.color.paper};
+  padding: 12px 14px;
+  font-family: ${theme.font.mono};
+  font-size: 0.85rem;
+
+  &::placeholder {
+    color: ${theme.color.steelLight};
+  }
+  &:focus {
+    border-color: ${theme.color.brass};
+  }
+`;
+
+const ClearButton = styled.button`
+  background: transparent;
+  border: 1px solid ${theme.color.steel};
+  color: ${theme.color.steelLight};
+  padding: 11px 16px;
+  font-family: ${theme.font.mono};
+  font-size: 0.76rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+`;
+
+const FilterNote = styled.p`
+  font-family: ${theme.font.mono};
+  font-size: 0.7rem;
+  color: ${theme.color.steelLight};
+  opacity: 0.75;
+  line-height: 1.5;
+  margin-bottom: 20px;
+  max-width: 60ch;
+`;
+
 const RankButton = styled.button<{ $active: boolean }>`
   background: ${(p) => (p.$active ? theme.color.brass : "transparent")};
   border: 1px solid ${theme.color.brass};
@@ -133,6 +171,18 @@ const Role = styled.div`
   letter-spacing: 0.01em;
 `;
 
+const EmployerLine = styled.div`
+  font-family: ${theme.font.mono};
+  font-size: 0.7rem;
+  color: ${theme.color.steelLight};
+  margin-top: 3px;
+
+  span.unverified {
+    opacity: 0.7;
+    font-style: italic;
+  }
+`;
+
 const Cell = styled.div`
   font-family: ${theme.font.mono};
   font-size: 0.82rem;
@@ -185,14 +235,34 @@ const RANKS: Array<Rank | "ALL"> = [
   "CATERING",
 ];
 
+type ContractRange = "ANY" | "SHORT" | "MEDIUM" | "LONG";
+
+const CONTRACT_RANGES: Array<{ value: ContractRange; label: string }> = [
+  { value: "ANY", label: "Any length" },
+  { value: "SHORT", label: "≤6 months" },
+  { value: "MEDIUM", label: "7–9 months" },
+  { value: "LONG", label: "10+ months" },
+];
+
+function contractInRange(months: number, range: ContractRange): boolean {
+  if (range === "SHORT") return months <= 6;
+  if (range === "MEDIUM") return months >= 7 && months <= 9;
+  if (range === "LONG") return months >= 10;
+  return true;
+}
+
 const Positions: React.FC = () => {
   const { positions } = useCrewing();
   const [query, setQuery] = useState("");
   const [rankFilter, setRankFilter] = useState<Rank | "ALL">("ALL");
+  const [minWage, setMinWage] = useState("");
+  const [contractFilter, setContractFilter] = useState<ContractRange>("ANY");
   const [applying, setApplying] = useState<Position | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
+    const minWageNum = minWage.trim() ? Number(minWage) : null;
+
     return positions.filter((p) => {
       const matchesRank = rankFilter === "ALL" || p.rank === rankFilter;
       const matchesQuery =
@@ -200,9 +270,16 @@ const Positions: React.FC = () => {
         p.role.toLowerCase().includes(q) ||
         p.vessel.toLowerCase().includes(q) ||
         p.vesselType.toLowerCase().includes(q);
-      return matchesRank && matchesQuery;
+      // Postings without a structured wage figure can't be matched against
+      // a numeric filter — they're excluded here, not assumed to fail it.
+      const matchesWage =
+        minWageNum === null || (p.wageMin !== null && p.wageMin >= minWageNum);
+      const matchesContract =
+        contractFilter === "ANY" ||
+        (p.contractMonths !== null && contractInRange(p.contractMonths, contractFilter));
+      return matchesRank && matchesQuery && matchesWage && matchesContract;
     });
-  }, [positions, query, rankFilter]);
+  }, [positions, query, rankFilter, minWage, contractFilter]);
 
   return (
     <Wrap id="positions">
@@ -233,6 +310,45 @@ const Positions: React.FC = () => {
         ))}
       </Filters>
 
+      <Filters>
+        <WageInput
+          type="number"
+          min="0"
+          value={minWage}
+          onChange={(e) => setMinWage(e.target.value)}
+          placeholder="Min wage (USD/month)"
+          aria-label="Minimum wage"
+        />
+        {CONTRACT_RANGES.map((c) => (
+          <RankButton
+            key={c.value}
+            $active={contractFilter === c.value}
+            onClick={() => setContractFilter(c.value)}
+            type="button"
+          >
+            {c.label}
+          </RankButton>
+        ))}
+        {(minWage || contractFilter !== "ANY") && (
+          <ClearButton
+            type="button"
+            onClick={() => {
+              setMinWage("");
+              setContractFilter("ANY");
+            }}
+          >
+            Clear
+          </ClearButton>
+        )}
+      </Filters>
+
+      <FilterNote>
+        Wage and contract filters only match postings where the employer
+        provided that detail as a number, not just descriptive text — some
+        real postings won't appear under these filters even though they're
+        visible in the full list above.
+      </FilterNote>
+
       <Board>
         <RowHead>
           <div>Rank</div>
@@ -250,6 +366,23 @@ const Positions: React.FC = () => {
           <Row key={p.id}>
             <RankBadge>{RANK_LABELS[p.rank]}</RankBadge>
             <Role>{p.role}</Role>
+            <EmployerLine>
+              {p.employer ? (
+                <>
+                  {p.employer.companyName}
+                  {p.employer.licenseNumber && (
+                    <span className="unverified">
+                      {" "}
+                      · License {p.employer.licenseNumber}
+                      {p.employer.licenseCountry ? ` (${p.employer.licenseCountry})` : ""}
+                      {" — self-reported"}
+                    </span>
+                  )}
+                </>
+              ) : (
+                <span className="unverified">Employer not specified</span>
+              )}
+            </EmployerLine>
             <Cell>
               <CellLabel>Wage:</CellLabel>
               {p.wage || "Not disclosed"}

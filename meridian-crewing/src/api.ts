@@ -30,6 +30,12 @@ export const RANK_ROLE_SUGGESTIONS: Record<Rank, string[]> = {
 };
 export type ApplicationStatus = "SUBMITTED" | "SHORTLISTED" | "OFFERED" | "REJECTED";
 
+export interface EmployerProfile {
+  companyName: string;
+  licenseNumber: string | null;
+  licenseCountry: string | null;
+}
+
 export interface Position {
   id: string;
   rank: Rank;
@@ -39,6 +45,10 @@ export interface Position {
   contract: string;
   signOn: string;
   wage: string | null;
+  wageMin: number | null;
+  contractMonths: number | null;
+  employer: EmployerProfile | null;
+  filled: boolean;
 }
 
 export interface Application {
@@ -126,7 +136,7 @@ export function fetchPositions(): Promise<Position[]> {
 
 // Employer-only — backend rejects this without a valid EMPLOYER token.
 export function createPosition(
-  input: Omit<Position, "id">,
+  input: Omit<Position, "id" | "employer" | "filled">,
   token: string
 ): Promise<Position> {
   return request<Position>(
@@ -199,4 +209,48 @@ export function fetchApplicationDocuments(
     undefined,
     token
   );
+}
+
+export function fetchEmployerProfile(token: string): Promise<EmployerProfile | null> {
+  return request<EmployerProfile | null>("/api/employer-profile", undefined, token);
+}
+
+export function updateEmployerProfile(
+  profile: EmployerProfile,
+  token: string
+): Promise<EmployerProfile> {
+  return request<EmployerProfile>(
+    "/api/employer-profile",
+    { method: "PUT", body: JSON.stringify(profile) },
+    token
+  );
+}
+
+export function deleteAccount(token: string): Promise<void> {
+  return request<void>("/api/account", { method: "DELETE" }, token);
+}
+
+// Everything an employer has posted, filled or not.
+export function fetchMyPostings(token: string): Promise<Position[]> {
+  return request<Position[]>("/api/my-postings", undefined, token);
+}
+
+export function setPositionFilled(
+  positionId: string,
+  filled: boolean,
+  token: string
+): Promise<Position> {
+  return request<Position>(
+    `/api/positions/${positionId}/filled`,
+    { method: "PATCH", body: JSON.stringify({ filled }) },
+    token
+  );
+}
+
+export function deletePosition(positionId: string, token: string): Promise<void> {
+  return request<void>(`/api/positions/${positionId}`, { method: "DELETE" }, token);
+}
+
+export function withdrawApplication(applicationId: string, token: string): Promise<void> {
+  return request<void>(`/api/applications/${applicationId}`, { method: "DELETE" }, token);
 }

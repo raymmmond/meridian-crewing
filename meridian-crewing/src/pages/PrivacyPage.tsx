@@ -16,7 +16,7 @@ const PrivacyPage: React.FC = () => (
   <LegalWrap>
     <BackLink href="/">← Back to Meridian Crewing</BackLink>
     <LegalTitle>Privacy Policy</LegalTitle>
-    <LegalMeta>Last updated: [DATE]</LegalMeta>
+    <LegalMeta>Last updated: 16 August 2026</LegalMeta>
 
     <LegalP>
       This Privacy Policy explains how Meridian Crewing ("we," "us," "the

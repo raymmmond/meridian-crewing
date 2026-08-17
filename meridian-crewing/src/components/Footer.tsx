@@ -1,7 +1,9 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import styled from "styled-components";
 import theme from "../theme";
+import { useAuth } from "../context/AuthContext";
+import DeleteAccountModal from "./DeleteAccountModal";
 
 const Wrap = styled.footer`
   background: ${theme.color.navy900};
@@ -73,41 +75,69 @@ const Bottom = styled.div`
   color: ${theme.color.steelLight};
 `;
 
-const Footer: React.FC = () => (
-  <Wrap>
-    <Inner>
-      <Top>
-        <div>
-          <Word>MERIDIAN CREWING</Word>
-          <Tag>
-            Manning desk open around the clock across three time zones —
-            Rotterdam, Manila, Panama.
-          </Tag>
-        </div>
-        <div>
-          <ColTitle>Seafarers</ColTitle>
-          <ColLink href="#positions">Open berths</ColLink>
-          <ColLink href="#process">How sign-on works</ColLink>
-          <ColLink href="#top">Register</ColLink>
-        </div>
-        <div>
-          <ColTitle>Employers</ColTitle>
-          <ColLink href="#employers">Post a vacancy</ColLink>
-          <ColLink href="#employers">Candidate pool</ColLink>
-          <ColLink href="#top">Talk to the desk</ColLink>
-        </div>
-        <div>
-          <ColTitle>Legal</ColTitle>
-          <ColLink as={Link} to="/terms">Terms of Service</ColLink>
-          <ColLink as={Link} to="/privacy">Privacy Policy</ColLink>
-        </div>
-      </Top>
-      <Bottom>
-        <span>© 2026 Meridian Crewing. Partner agencies hold valid national manning licenses (DMW, RPSL, or equivalent) and operate under MLC 2006.</span>
-        <span>Rotterdam · Manila · Panama City</span>
-      </Bottom>
-    </Inner>
-  </Wrap>
-);
+const DeleteAccountLink = styled.button`
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: ${theme.font.mono};
+  font-size: 0.72rem;
+  color: ${theme.color.steelLight};
+  text-decoration: underline;
+  opacity: 0.7;
+
+  &:hover {
+    opacity: 1;
+    color: ${theme.color.rustLight};
+  }
+`;
+
+const Footer: React.FC = () => {
+  const { user } = useAuth();
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
+  return (
+    <Wrap>
+      <Inner>
+        <Top>
+          <div>
+            <Word>MERIDIAN CREWING</Word>
+            <Tag>
+              Manning desk open around the clock across three time zones —
+              Rotterdam, Manila, Panama.
+            </Tag>
+          </div>
+          <div>
+            <ColTitle>Seafarers</ColTitle>
+            <ColLink href="#positions">Open berths</ColLink>
+            <ColLink href="#process">How sign-on works</ColLink>
+            <ColLink href="#top">Register</ColLink>
+          </div>
+          <div>
+            <ColTitle>Employers</ColTitle>
+            <ColLink href="#employers">Post a vacancy</ColLink>
+            <ColLink href="#employers">Candidate pool</ColLink>
+            <ColLink href="#top">Talk to the desk</ColLink>
+          </div>
+          <div>
+            <ColTitle>Legal</ColTitle>
+            <ColLink as={Link} to="/terms">Terms of Service</ColLink>
+            <ColLink as={Link} to="/privacy">Privacy Policy</ColLink>
+          </div>
+        </Top>
+        <Bottom>
+          <span>© 2026 Meridian Crewing. Partner agencies hold valid national manning licenses (DMW, RPSL, or equivalent) and operate under MLC 2006.</span>
+          {user ? (
+            <DeleteAccountLink type="button" onClick={() => setDeleteOpen(true)}>
+              Delete my account
+            </DeleteAccountLink>
+          ) : (
+            <span>Rotterdam · Manila · Panama City</span>
+          )}
+        </Bottom>
+      </Inner>
+      {deleteOpen && <DeleteAccountModal onClose={() => setDeleteOpen(false)} />}
+    </Wrap>
+  );
+};
 
 export default Footer;

@@ -14,6 +14,12 @@ export interface AuthUser {
   role: UserRole;
 }
 
+export interface EmployerProfile {
+  companyName: string;
+  licenseNumber: string | null;
+  licenseCountry: string | null;
+}
+
 export interface Position {
   id: string;
   rank: Rank;
@@ -23,6 +29,10 @@ export interface Position {
   contract: string;
   signOn: string;
   wage: string | null;
+  wageMin: number | null;
+  contractMonths: number | null;
+  employer: EmployerProfile | null;
+  filled: boolean;
 }
 
 export interface Application {

@@ -6,6 +6,7 @@ import {
   fetchApplications,
   createPosition,
   createApplication,
+  withdrawApplication,
 } from "../api";
 import { useAuth } from "./AuthContext";
 
@@ -14,8 +15,9 @@ interface CrewingContextValue {
   applications: Application[];
   loading: boolean;
   connectionError: string | null;
-  addPosition: (p: Omit<Position, "id">) => Promise<void>;
+  addPosition: (p: Omit<Position, "id" | "employer" | "filled">) => Promise<void>;
   addApplication: (a: Omit<Application, "id" | "submitted" | "status">) => Promise<void>;
+  removeApplication: (applicationId: string) => Promise<void>;
 }
 
 const CrewingContext = createContext<CrewingContextValue | null>(null);
@@ -85,6 +87,14 @@ export const CrewingProvider: React.FC<{ children: React.ReactNode }> = ({
     setApplications((prev) => [created, ...prev]);
   };
 
+  const removeApplication: CrewingContextValue["removeApplication"] = async (
+    applicationId
+  ) => {
+    if (!token) throw new Error("Log in to withdraw an application.");
+    await withdrawApplication(applicationId, token);
+    setApplications((prev) => prev.filter((a) => a.id !== applicationId));
+  };
+
   return (
     <CrewingContext.Provider
       value={{
@@ -94,6 +104,7 @@ export const CrewingProvider: React.FC<{ children: React.ReactNode }> = ({
         connectionError,
         addPosition,
         addApplication,
+        removeApplication,
       }}
     >
       {children}

@@ -15,7 +15,7 @@ const TermsPage: React.FC = () => (
   <LegalWrap>
     <BackLink href="/">← Back to Meridian Crewing</BackLink>
     <LegalTitle>Terms of Service</LegalTitle>
-    <LegalMeta>Last updated: [DATE]</LegalMeta>
+    <LegalMeta>Last updated: 16 August 2026</LegalMeta>
 
     <LegalP>
       These Terms of Service ("Terms") govern your use of Meridian Crewing
