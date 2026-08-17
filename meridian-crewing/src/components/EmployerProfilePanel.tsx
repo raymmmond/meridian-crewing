@@ -6,7 +6,6 @@ import {
   fetchEmployerProfile,
   updateEmployerProfile,
 } from "../api";
-
 const Wrap = styled.div`
   border: 1px solid ${theme.color.brass};
   background: ${theme.color.navy700};
@@ -124,7 +123,7 @@ const LICENSE_COUNTRIES = [
 ];
 
 const EmployerProfilePanel: React.FC = () => {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [companyName, setCompanyName] = useState("");
   const [licenseNumber, setLicenseNumber] = useState("");
   const [licenseCountry, setLicenseCountry] = useState("");
@@ -134,7 +133,7 @@ const EmployerProfilePanel: React.FC = () => {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    if (!token) {
+    if (!token || user?.role !== "EMPLOYER") {
       setLoading(false);
       return;
     }
@@ -179,7 +178,7 @@ const EmployerProfilePanel: React.FC = () => {
     }
   };
 
-  if (loading) return null;
+  if (loading || user?.role !== "EMPLOYER") return null;
 
   return (
     <Wrap>
