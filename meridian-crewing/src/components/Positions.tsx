@@ -31,7 +31,11 @@ const HeadNote = styled.p`
   color: ${theme.color.steelLight};
   max-width: 34ch;
   line-height: 1.6;
-  text-align: right;
+  text-align: left;
+
+  @media (min-width: 700px) {
+    text-align: right;
+  }
 `;
 
 const Filters = styled.div`
@@ -134,21 +138,24 @@ const Row = styled.div`
   display: grid;
   grid-template-columns: 1fr;
   gap: 6px;
-  padding: 22px 24px;
+  padding: 20px 20px 20px 18px;
   border-bottom: 1px solid ${theme.color.navy700};
-  transition: background 0.15s ease;
+  border-left: 3px solid transparent;
+  transition: background 0.15s ease, border-left-color 0.15s ease;
 
   &:last-child {
     border-bottom: none;
   }
   &:hover {
     background: ${theme.color.navy700};
+    border-left-color: ${theme.color.brass};
   }
 
   @media (min-width: 860px) {
     grid-template-columns: 130px 1fr 0.9fr 0.9fr 0.7fr 0.6fr 130px;
     align-items: center;
     gap: 16px;
+    padding: 22px 24px 22px 21px;
   }
 `;
 
@@ -159,9 +166,12 @@ const RankBadge = styled.div`
   border: 1px solid ${theme.color.brass};
   padding: 3px 8px;
   display: inline-block;
+  width: fit-content;
   max-width: 100%;
   white-space: normal;
   line-height: 1.3;
+  justify-self: start;
+  margin-bottom: 4px;
 `;
 
 const Role = styled.div`
@@ -210,7 +220,12 @@ const Apply = styled.button`
   padding: 9px 16px;
   text-align: center;
   width: fit-content;
+  margin-top: 6px;
   transition: background 0.15s ease, color 0.15s ease;
+
+  @media (min-width: 860px) {
+    margin-top: 0;
+  }
 
   &:hover {
     background: ${theme.color.rustLight};

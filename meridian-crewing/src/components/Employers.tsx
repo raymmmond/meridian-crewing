@@ -65,8 +65,9 @@ const StatsPanel = styled.div`
 `;
 
 const PanelRow = styled.div`
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 20px;
   padding: 14px 0;
   border-bottom: 1px solid ${theme.color.steel};
   font-family: ${theme.font.mono};
@@ -83,6 +84,8 @@ const Key = styled.span`
 
 const Val = styled.span`
   color: ${theme.color.paper};
+  text-align: right;
+  white-space: nowrap;
 `;
 
 const Form = styled.form`

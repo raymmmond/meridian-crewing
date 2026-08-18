@@ -112,14 +112,12 @@ const UploadForm = styled.form`
   border: 1px solid ${theme.color.navy700};
   padding: 20px;
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: flex-end;
+  flex-direction: column;
+  gap: 18px;
 `;
 
 const Field = styled.label`
-  flex: 1;
-  min-width: 160px;
+  display: block;
   font-family: ${theme.font.mono};
   font-size: 0.7rem;
   letter-spacing: 0.06em;
@@ -139,13 +137,33 @@ const Input = styled.input`
   font-size: 0.88rem;
 `;
 
+const FileRow = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  @media (min-width: 600px) {
+    flex-direction: row;
+    align-items: center;
+  }
+`;
+
 const FileInput = styled.input`
   display: block;
   margin-top: 8px;
+  width: 100%;
+  max-width: 100%;
   color: ${theme.color.steelLight};
   font-family: ${theme.font.body};
-  font-size: 0.82rem;
-  max-width: 220px;
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  @media (min-width: 600px) {
+    margin-top: 0;
+    flex: 1;
+    min-width: 0;
+  }
 `;
 
 const UploadButton = styled.button`
@@ -158,6 +176,7 @@ const UploadButton = styled.button`
   letter-spacing: 0.05em;
   text-transform: uppercase;
   white-space: nowrap;
+  align-self: flex-start;
 
   &:disabled {
     opacity: 0.5;
@@ -404,15 +423,17 @@ const SeafarerDashboard: React.FC = () => {
             </Field>
             <Field>
               File
-              <FileInput
-                ref={fileInputRef}
-                type="file"
-                accept="application/pdf,image/jpeg,image/png"
-              />
+              <FileRow>
+                <FileInput
+                  ref={fileInputRef}
+                  type="file"
+                  accept="application/pdf,image/jpeg,image/png"
+                />
+                <UploadButton type="submit" disabled={uploading}>
+                  {uploading ? "Uploading…" : "Upload"}
+                </UploadButton>
+              </FileRow>
             </Field>
-            <UploadButton type="submit" disabled={uploading}>
-              {uploading ? "Uploading…" : "Upload"}
-            </UploadButton>
             <HelpText>PDF, JPEG, or PNG. Max 10MB.</HelpText>
             {uploadError && <ErrorText>{uploadError}</ErrorText>}
           </UploadForm>
